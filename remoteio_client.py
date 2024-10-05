@@ -109,25 +109,24 @@ if __name__ == "__main__":
         remote_pin2=remote_pi.pin(16,'g')
 
 
-        z=0
-        while z<5:
-            remote_pin.on()
-            remote_pin1.pulse()
-            remote_pin2.blink()
+        
+        remote_pin.on(time_ms=10000)
+        #remote_pin1.pulse()
+        #remote_pin2.blink()
 
-            time.sleep(2.0)
-                        
-            remote_pin.off()
-            remote_pin1.off()
-            remote_pin2.off()
+        
+                    
+        #remote_pin.off()
+        #remote_pin1.off()
+        #remote_pin2.off()
 
-            time.sleep(2.0)
+            
 
-            z+=1
+            
 
-        remote_pin.close()
-        remote_pin1.close()
-        remote_pin2.close()
+        #remote_pin.close()
+        #remote_pin1.close()
+        #remote_pin2.close()
         #remote_pin1.pulse()
         #remote_pin2.blink()
 

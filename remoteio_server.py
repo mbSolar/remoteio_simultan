@@ -27,7 +27,7 @@ led_dict = {}
 led_que_dict={}
 
 # target task function
-def led_off(led,pin):
+def led_off(led):
     led.off()
    
  
@@ -54,7 +54,7 @@ def handle_timer(led):
                 return
 
             if time_ms > 0.:
-                t=threading.Timer(time_thr,led_off,[led,pin])
+                t=threading.Timer(time_thr,led_off,[led])
                 t.start()
                 while t.is_alive():
                     if qu.empty():
