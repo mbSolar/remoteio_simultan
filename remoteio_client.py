@@ -5,6 +5,9 @@ import socket
 from remoteio import PORT
 from remoteio import PIN_MAP_gb
 
+import logging
+logging.basicConfig(level=logging.INFO,style="{",format="{asctime}[{levelname:8}]{message}")
+logger = logging.getLogger(name="remoteio")
 
 
 
@@ -103,65 +106,45 @@ class RemotePin:
 
 
 # Example usage:
+
+
 if __name__ == "__main__":
-    import logging
-    import time
-    remote_pi=None
-    remote_pi1=None
+    from time import sleep
+    time = 2000
+    server_ip = "raspy5"
+    server_port = 8509
+  
+
+    # Create instance of remote Raspberry Pi
+    remote_server = RemoteServer(server_ip, server_port)
     
-    try: 
-        logging.basicConfig(level=logging.INFO)
-        logger = logging.getLogger(name="remoteio")
-        raspi1='raspy5' 
-        # erstellt virtuelle Pins auf 2 verschiedenen Raspberry Pis
-        # 
-
-        #remote_pi=RemoteServer(raspi1,8509)
-        #remote_pi1=RemoteServer(raspi1,8510)
-
-        # 'g ': BCM -B e z e i c h n u n g ( G P I O 2 1 )
-        #remote_pin=remote_pi.pin(21,'g')
-        #remote_pin1=remote_pi1.pin(20,'g')
-        #remote_pin2=remote_pi1.pin(36,'b') 
-
+    remote_pin = remote_server.pin(21, 'g')
+    remote_pin1 = remote_server.pin(38, 'b')
+    z=0
+    while True:
+    # Demo features
+        remote_pin.on(time_ms=1000) # Time until switch off
+        remote_pin1.on(time_ms=1000) # Time until switch off
+        sleep(5)
+        remote_pin.blink(time_ms=4000)
+        remote_pin1.blink(time_ms=4000)
+        #sleep(4)
+        remote_pin.pulse(time_ms=4000)
+        remote_pin1.pulse(time_ms=4000)
+        #sleep(4)
+        remote_pin.blink(time_ms=4000,arg1=0.1,arg2=0.2)
+        remote_pin1.blink(time_ms=4000,arg1=0.1,arg2=0.2)
+        #sleep(4)
+        remote_pin.value(time_ms=4000,arg1=0.1)
+        remote_pin1.value(time_ms=4000,arg1=0.1)
+        #sleep(4)
+        remote_pin.off()
+        remote_pin1.off()
+        sleep(4)
+        #remote_server.close()
+        #z=z+1
         
-            
-        #remote_pi=RemoteServer(raspi1,8509)
-        #remote_pin=remote_pi.pin(21,'g')
-        #remote_pin1=remote_pi1.pin(20,'g')
-        #remote_pin2=remote_pi1pin(36,'b') 
-
-        remote_pi=RemoteServer(raspi1,8509)
-        remote_pi1=RemoteServer(raspi1,8510)
-        remote_pin=remote_pi.pin(21,'g')
-        remote_pin1=remote_pi1.pin(20,'g')
-        remote_pin2=remote_pi1.pin(36,'b') 
-
-        for z in range(0,3):
-            remote_pin.on(time_ms=4000)
-            remote_pin.pulse(time_ms=4000,arg1=0.4)
-            remote_pin.blink(time_ms=4000,arg1=01.0,arg2=0.5)
-            remote_pin1.on(time_ms=4000)
-            remote_pin1.pulse(time_ms=4000,arg1=0.4)
-            remote_pin1.blink(time_ms=4000,arg1=01.0,arg2=0.5)
-            remote_pin2.on(time_ms=4000)
-            remote_pin2.pulse(time_ms=4000,arg1=0.4)
-            remote_pin2.blink(time_ms=4000,arg1=01.0,arg2=0.5)
-        
-        while True:
-            pass
-            #remote_pi.close()
-            #time.sleep(1.0)
-            #remote_pi.close()
-            #time.sleep(15.0)
-        
-        
-        
-    except Exception as e:
-        logger.error(e)
-    finally:
+    while True:
         pass
-        #if remote_pi:
-        #    remote_pi.close()
-        #if remote_pi1:
-        #    remote_pi1.close()
+            
+

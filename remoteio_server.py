@@ -4,24 +4,29 @@ from gpiozero import PWMLED
 from multiprocessing import Process, Queue, Event, Lock
 import time
 import logging
-from remoteio import PORT      
-#from queue import Queue
+from remoteio import PORT 
+import threading     
 
 logging.basicConfig(level=logging.INFO,style="{",format="{asctime}[{levelname:8}]{message}")
 logger = logging.getLogger(name="remoteio")
 
+
+class QueueFullError(Exception):
+    def __init__(self,string):
+        self.__str__= string
+        
+
+#multiprocessing queue has no clear function
+def clear_queue(qu):
+    while not qu.empty():
+        qu.get()
+
 # target task function
 def led_off(led):
     led.off()
-   
 
-
-    
-
-def handle_led(pin,qu,ev,lo,h_list,l_dict):
-
+def handle_led(pin,qu,ev,lo,h_list,mode):
     led=None
-
     with lo:
        h_list.append(pin)
 
@@ -35,8 +40,17 @@ def handle_led(pin,qu,ev,lo,h_list,l_dict):
             if ende==True:
                 break
 
-            # perform all tasks in queue
-            numbering, pin, command, time_ms, arg1, arg2 = qu.get() 
+            if mode=='wait':
+                # perform next task in queue
+                numbering, pin, command, time_ms, arg1, arg2 = qu.get() 
+            else:
+                # perform last task in queue
+                canc='cancelled before start'
+                while not qu.empty():
+                    numbering, pin, command, time_ms, arg1, arg2 = qu.get()
+                    if not qu.empty():
+                        logger.info(f"Pin: {pin}({numbering}), State: {command}, " +
+                                    f"Time: {time_ms}, Arg1: {arg1}. Arg2: {arg2} {canc}") 
 
             # the precedent led-process to the same led is perhaps alive. Waiting until it is destroyed  
             generated=False          
@@ -51,8 +65,7 @@ def handle_led(pin,qu,ev,lo,h_list,l_dict):
                 generated=False
                 logger.info('led for ' + pin + '(b) generated')
 
-            time_ms = float(time_ms) / 1000.0
-            #time_thr=time_ms
+            time_sec = float(time_ms) / 1000.0
             try:   
                 match command:
                     case 'value':
@@ -65,21 +78,25 @@ def handle_led(pin,qu,ev,lo,h_list,l_dict):
             except:
                 logger.info('command error: ' + command)
                 continue
-    
-            if time_ms > 0.:
-                time.sleep(time_ms)
-                if qu.empty:
-                    led.off()
 
-                #t=threading.Timer(time_thr,led_off,[led])
-                #t.start()
-                #while t.is_alive():
-                #    if qu.empty():
-                #        pass                        
-                #    else:
-                #        t.cancel()
-                #        break
-            logger.info(f"Pin: {pin}({numbering}), State: {command}, Time: {time_ms}, Arg1: {arg1}. Arg2: {arg2}")    
+            canc=''
+            if time_sec > 0.:
+                if mode=='wait':
+                    time.sleep(time_sec)
+                    if qu.empty:
+                        led.off()
+
+                else:
+                    t=threading.Timer(time_sec,led_off,[led])
+                    t.start()
+                    while t.is_alive():
+                        if qu.empty():
+                            pass                        
+                        else:
+                            t.cancel()
+                            canc='cancelled during execution'
+                            break
+            logger.info(f"Pin: {pin}({numbering}), State: {command}, Time: {time_ms}, Arg1: {arg1}. Arg2: {arg2} {canc}")    
    
     
     except Exception as e:
@@ -100,9 +117,10 @@ def handle_led(pin,qu,ev,lo,h_list,l_dict):
 ########################################################################################################################
 #     
 # Handle client requests
-def handle_client(conn,addr,client_port,process_lock,h_led_list):
+def handle_client(conn,addr,client_port,process_lock,h_led_list,mode):
 
     led_dict={}
+    error=False
     data1=''
     try:
         while True:
@@ -117,13 +135,14 @@ def handle_client(conn,addr,client_port,process_lock,h_led_list):
                 time_ms,sep, datat = datac.partition(' ')
                 arg1, sep,dataa = datat.partition(' ')
                 arg2, sep,data1 = dataa.partition(' ')
-
+                if not numbering =='b':
+                    raise ValueError('numbering must be (b)')
                 on_queue=False
                 # Create or retrieve LED instance for the specified pin number
                 if pin not in led_dict:
                     pin_ev=Event()
-                    pin_qu=Queue(maxsize=1024)                        
-                    pin_proc=Process(target=handle_led, args=(pin,pin_qu,pin_ev,process_lock,h_led_list,led_dict)) 
+                    pin_qu=Queue(maxsize=100)                        
+                    pin_proc=Process(target=handle_led, args=(pin,pin_qu,pin_ev,process_lock,h_led_list,mode)) 
                     pin_proc_started=False
                     led_dict[pin]=[pin_qu,pin_ev,pin_proc,pin_proc_started]
                     led_dict[pin][0].put([numbering,pin,command,time_ms,arg1,arg2])
@@ -137,30 +156,40 @@ def handle_client(conn,addr,client_port,process_lock,h_led_list):
 
                 # Execute gpio action 
                 if not on_queue:
-                    if led_dict[pin][0].full():
-                        raise RuntimeError(pin + ' ' + 'queue full')
-                    led_dict[pin][0].put([numbering,pin,command,time_ms,arg1,arg2])  
+                    while led_dict[pin][0].full():
+                        pass
+                    else:
+                        led_dict[pin][0].put([numbering,pin,command,time_ms,arg1,arg2]) 
 
     except ValueError as e:
-        logger.error(e)                     
-    except RuntimeError as e:
-        logger.error(e)                     
+        logger.error(e) 
+        error=True
     except Exception as e:
         logger.error(e)
+        error=True
     finally:
+        if error:
+           for pi in led_dict.keys():
+            # clearing of all pin-queues
+            clear_queue(pi)
+            # forced led off
+            led_dict[pi][0].put([numbering,pin,'off','0','0.','0.'])  
         # Cleanup actions on disconnect
         if conn:
             conn.close()
+            logger.info(f"Disconnected from client (" + str(addr)+ '), client_port = ' + str(client_port))
         for pi,[qu,ev,proc,proc_state] in led_dict.items():
             ev.set()
-        logger.info(f"Disconnected from client (" + str(addr)+ '), client_port = ' + str(client_port))
+        
 
-def run_server(port=PORT):
+def run_server(port=PORT,mode='wait'):
+    if (mode !='wait' and mode!='nowait'):
+        raise ValueError('mode must be wait or nowait')
     lock=Lock()
     handle_led_list=[]
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind(('', port))          
+        server_socket.bind(('', port))         
         server_socket.listen(5)
 
         logger.info(f"remoteio listening on port {port}...")
@@ -168,16 +197,18 @@ def run_server(port=PORT):
         while True:
             conn, addr = server_socket.accept()
             logger.info(f"Connection from {addr}")
-            client_handler=Process(target=handle_client, args=(conn,addr,port,lock,handle_led_list))
+            client_handler=Process(target=handle_client, args=(conn,addr,port,lock,handle_led_list,mode))
             client_handler.start()
     
 
 if __name__ == "__main__":
     try:
-        server_8509=Process(target=run_server, args=(8509,))
-        server_8509.start()
-        server_8510=Process(target=run_server, args=(8510,))
-        server_8510.start()
+        run_server(mode='wait')
+
+        #server_8509=Process(target=run_server, args=(8509,'nowait'))
+        #server_8509.start()
+        #server_8510=Process(target=run_server, args=(8510,'wait'))
+        #server_8510.start()
             
 
 
