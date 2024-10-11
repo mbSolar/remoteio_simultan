@@ -13,7 +13,7 @@ The main technical ideas in remoteio_server.py are the use of
   6. special treating of the reveive-buffer, necessary when more data then the length of the receive-buffer(size)=1024 come in. 
 
 Main ideas in remoteio_server
-  1. run_server(port=PORT,mode='wait') with a further parameter mode, that defaults to 'wait'.
+  1. def run_server(port=PORT,mode='wait') with a further parameter mode, that defaults to 'wait'.
      In the mode 'wait' each pin-manipulation that reaches the server is executed, even if the connection is interrupted.
      In the mode 'nowait' a pin-manipulation interrupts the preceeding one, even if time_ms is not finished.
      
